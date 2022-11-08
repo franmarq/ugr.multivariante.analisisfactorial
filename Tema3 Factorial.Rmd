@@ -1,0 +1,340 @@
+---
+title: "UGR Multivariante Factorial"
+author: "franmarq@gmail.com"
+date: '2022-10-30'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Ejercicio 2:
+Una empresa dedicada al diseño de automóviles desea estudiar cuales son los deseos del comprador. Para ello realiza una encuesta a 20 individuos preguntándoles 10 características de sus productos que valoran de 1 a 5. Los datos se encuentran en el fichero factorial2. Intentar encontrar los factores de comportamiento latentes en los encuestados, identificar los factores.
+
+
+Solucion:
+
+Empezamos haciendo la lectura del conjunto de datos y sobre el mismo entendiendo las características principales de su estructura.
+
+```{r readdata}
+datfact <- read.table("factorial2.txt", header=TRUE, sep="\t")
+attach(datfact)
+str(datfact)
+```
+
+
+
+Efectivamente tenemos 20 observaciones y 10 características. Se comprueba que los datos son para cada individuo valores entre 1 y 5 y que en el conjunto no se presentan valores ausentes.
+
+A continuación, para pasar al análisis factorial, debemos validar las hipótesis relacionadas con las variables: Linealidad, Normalidad y Correlación.
+
+
+Iniciamos con un estudios de las correlaciones bivariantes:
+
+```{r corrvar}
+require(GGally)
+require(corrplot)
+ggpairs(datfact, lower = list(continuous = "smooth"),
+diag = list(continuous = "barDiag"), axisLabels = "none")
+corrplot(cor(datfact),sig.level=0.05,typ="lower")
+
+```
+
+del resultado anterior podemos observar como, entre los pares de caracteríticas, la mayoria de las combinaciones presenta una relación lineal. En algunos casos positiva y un para un grupo más numeroso negativa.La forma de la distribución de las variables, inicialemnte, no sugiereque presenten un comportamiento normal. Para comprobar esta hipótesis vamos a realizar el test correspondiente.
+
+Test de Normalidad:
+
+Debemos comprobar si la distribución que siguen los datos se pudiera considerar como ‘Distribución Normal’. Para ello generamos los respectivos gráficos la prueba Shapiro-Wilk, con un nivel de confianza del 95%, esta prueba es un contraste de hipótesis en donde la hipótesis nula es H0: los datos siguen una distribución normal. La prueba Shapiro-Wilk es la recomendada por tener menos de 50 observaciones. 
+
+```{r norm}
+library(mvnormtest)
+mshapiro.test(t(datfact))
+```
+
+Por el resultado del test, debemos rechazar la hipótesis nula por lo que debemos asumir que las variables no siguen esta distribución.Como se sabe, para el análisis factorial, aún cuando tengamos este resultado el análisis es factible teniendo en cuenta que no se podrá usar los resultados de la metodología maximo verosimil. 
+
+Ejecutamos a continuación el estudio de la correlación. El cual para nuestro caso lo haremos realizando el estudio de la matriz de correlaciones.
+
+```{r corrmatriz}
+Redatfac<-cor(datfact,method = c("pearson"))
+symnum(Redatfac)
+
+```
+
+El resultado muestra como algunos pares de variables son significativos y que el determinante de la matriz es pequeño, por lo que se aceptará que la matriz es signicativa. En otras palabras, se cumple la hipótesis.
+
+
+Ahora pasamos a obtener el análisis factorial, aplicando la técnica de Componentes Principales. Primero, con base en el resumen del análisis y la gráfica de los autovalores (plot) buscamos determinar el número de factores a considerar.
+
+```{r factorial}
+fac<-prcomp(datfact, retx=,center=TRUE,scale.=TRUE,tol=NULL)
+summary(fac)
+plot(fac)
+```
+
+Obtenemos ahora el biplot de los componentes principales.
+
+```{r biplot}
+biplot(fac)
+```
+De los resultados anteriores vemos que la forma como se distribuyen los factores sugiere que podemos considerar tres factores. Para comprobar la validez de esta decisión, vamos a comprobar si la hipÓtesis del nÚmero de factores considerado es correcta. Para ello recurriremos al paquete factanal:
+
+```{r factanal}
+
+facmle<-vector("list",3)
+for (i in 1:3) {
+  facmle<-factanal(datfact,i)
+  }
+facmle
+
+```
+El resultado del test nos indica que no hay suficiente evidencia para descartar la hipótesis nula, en otras palabras, es correcto considerar los tres primeros factores principales. Es de destacar que estos tres primeros factores explican el 79% de la variabilidad total.
+
+
+Considerando los tres factores principales, las cargas factoriales serán: 
+
+```{r factores}
+fac<-prcomp(datfact, retx=,center=TRUE,scale.=TRUE,tol=NULL,rank. = 3)
+fac
+```
+Estas cargas factoriales corresponden a los autovectores de la matriz de correlaciones. Para obtener las
+cargas factoriales debemos multiplicar cada columna por la raiz cuadrada del autovalor correspondiente. 
+
+```{r cargasfact}
+cargas11<-matrix(0,10,3)
+for (i in 1:3) cargas11[,i]<-fac$rotation[,i]*fac$sdev[i]
+cargas12<-varimax(cargas11,normalize=T)$loadings
+print(cargas12,cutoff=0.3)
+```
+Podemos obtener las comunalidadesy las unicidades con base en el procedimiento indicado en las notas de la materia (pag.50)
+
+```{r comunali}
+comunalidad<-matrix(0,10,2)
+for (i in 1:10)
+  {for (j in 1:3)
+        {comunalidad[i,1]=comunalidad[i,1]+cargas11[i,j]^2
+        comunalidad[i,2]=1-comunalidad[i,1]}}
+comunalidad
+```
+Obtenemos también la contribución de cada factor en la explicación de cada variable, tanto para el
+total de la varianza de la variable (cargas13) como para el total explicado por el modelo factorial (cargas14):
+
+```{r cargas}
+cargas13<-matrix(0,10,3)
+cargas14<-matrix(0,10,3)
+  for (i in 1:10)
+    {cargas13[i,]<-cargas12[i,]^2
+    cargas14[i,]<-cargas13[i,]/comunalidad[i,1]}
+print('cargas13')
+cargas13
+print('cargas14')
+cargas14
+```
+Vemos como el primer factor, explica de forma adecuada la variabilidad (casi total) de la variable 9 (Juvenil), con una proporcion de Cargas13=0.91.
+
+Completamos el análisis realizando otras gráficas.
+
+Obtenemos las gráficas bidimensionales de las cargas factoriales.
+
+
+```{r plotCaF}
+for (i in 1:2){
+  plot(cargas12[,i],cargas12[,i+1])
+  text(cargas12[,i],cargas12[,i+1])}
+```
+
+Ahora, graficamos las puntuaciones factoriales de los individuos:
+
+```{r grafic}
+# puntuaciones factoriales
+par(mfrow=c(3,2))
+for (i in 1:3){
+  for(j in 1:3){
+    {plot(fac$x[,i],fac$x[,j])}
+    text(fac$x[,i],fac$x[,j])}}
+```
+
+En conclusion: identificamos tres factores de comportamiento latente los cuales, con base en los resultados anteriores, pueden ser identificados como:
+
+Factor 1: Aspecto. Que relaciona a las características como Juvenil, Aerodinámico, etc.
+Factor 2: Utilidad. Que relaciona a aspectos como Capacidad, confor, seguridad, etc 
+Factor 3: Economia. Que relaciona a aspectos como precio, financiacion, etc.
+
+
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+Ejercicio 3:
+
+Se estudian 100 individuos para comprobar la idea que los consumidores tienen sobre una empresa. Para ello se estudian siete variables sobre la empresa. Se desea realizar un análisis factorial para intentar reducir la dimensión de 7 a menos factores. Los datos están en el fichero Factorial 3.
+
+Solucion:
+
+Empezamos haciendo la lectura del conjunto de datos y sobre el mismo entendiendo las características pincipales de los datos a analizar
+
+
+```{r readdata2}
+require(foreign) #Utilizamos este paquete para leer los datos desdel el archivo .SAV ya que .TXT tiene arreglos
+datfact2 <- read.spss("factorial3.sav", to.data.frame = TRUE)
+attach(datfact2)
+str(datfact2)
+```
+
+Efectivamente tenemos 100 observaciones y 7 características. Se comprueba que los datos son para cada individuo valores numéricos y que presentan un valor decimal. En el conjunto no se presentan valores ausentes. Leimos el conjunto desde el archivo spss (.sav) ya que el archivo .txt requiere trabajo de ordenamiento para su lectura.
+
+A continuación, para pasar al análisis factorial, debemos validar las hipótesis relacionadas con las variables: Linealidad, Normalidad y Correlación.
+
+
+Iniciamos con un estudios de las correlaciones bivariantes:
+
+```{r corrvar2}
+require(GGally)
+require(corrplot)
+ggpairs(datfact2, lower = list(continuous = "smooth"),
+diag = list(continuous = "barDiag"), axisLabels = "none")
+corrplot(cor(datfact2),sig.level=0.05,typ="lower")
+
+```
+
+del resultado anterior podemos observar como, entre los pares de caracteríticas, para algunas de las combinaciones se presenta una relación lineal. La forma de la distribución de las variables, inicialemnte, no sugiere que presenten un comportamiento normal en todos los casos. Para comprobar esta hipótesis vamos a realizar el test correspondiente.
+
+Test de Normalidad:
+
+Debemos comprobar si la distribución que siguen los datos se pudiera considerar como ‘Distribución Normal’. Para ello generamos los respectivos gráficos la prueba Shapiro-Wilk, con un nivel de confianza del 95%, esta prueba es un contraste de hipótesis en donde la hipótesis nula es H0: los datos siguen una distribución normal. La prueba Shapiro-Wilk es la recomendada por tener menos de 50 observaciones. 
+
+
+Normalidad:
+
+Debemos comprobar si la distribución que siguen los datos se pudiera considerar como ‘Distribución Normal’. Para ello generamos los respectivos gráficos la prueba Shapiro-Wilk, con un nivel de confianza del 95%, esta prueba es un contraste de hipótesis en donde la hipótesis nula es H0: los datos siguen una distribución normal. 
+
+```{r norm2}
+library(mvnormtest)
+mshapiro.test(t(datfact2))
+```
+
+Por el resultado del test, p-value = 3.609e-15, debemos rechazar la hipótesis nula por lo que debemos asumir que las variables no siguen una distribución normal. Como se sabe, para el análisis factorial, aún cuando tengamos este resultado el análisis es factible teniendo en cuenta que no se podrá usar los resultados de la metodología maximo verosimil. 
+
+Ejecutamos a continuación el estudio de la correlación. El cual para nuestro caso lo haremos realizando el estudio de la matriz de correlaciones.
+
+```{r corrmatriz2}
+Redatfac2<-cor(datfact2,method = c("pearson"))
+symnum(Redatfac2)
+
+```
+
+El resultado muestra como el determinante de la matriz es pequeño, pero no es concluyente para aceptar la hiótesis de correlacion. En este caso aplicaremos adicionalmente el contraste de esfericidad de Barlet.
+
+```{r esfericidad}
+library(psych)
+cortest.bartlett(datfact2,n=NULL)
+```
+Este test contrasta si la matriz de correlaciones es igual a la identidad (en cuyo caso no existiría correlación) frente a que la matriz de correlaciones sea significativa.
+Dado el valor p-value menor a 0.05, se rechaza la hipótesis nula y se aceptará que la matriz es signicativa. En otras palabras, se cumple la hipótesis.
+
+
+Ahora pasamos a obtener el análisis factorial, aplicando la técnica de Componentes Principales. Primero, con base en el resumen del análisis y la gráfica de los autovalores (plot) buscamos determinar el número de factores a considerar.
+
+```{r factorial2}
+fac2<-prcomp(datfact2, retx=,center=TRUE,scale.=TRUE,tol=NULL)
+summary(fac2)
+plot(fac2)
+```
+
+Obtenemos ahora el biplot de los componentes principales.
+
+```{r biplot2}
+biplot(fac2)
+```
+De los resultados anteriores vemos que la forma como se distribuyen los factores sugiere que podemos considerar tres factores. Para comprobar la validez de esta decisión, vamos a comprobar si la hipÓtesis del nÚmero de factores considerado es correcta. Para ello recurriremos al paquete factanal:
+
+```{r factanal2}
+
+facmle<-vector("list",3)
+for (i in 1:3) {
+  facmle<-factanal(datfact2,i)
+  }
+facmle
+
+```
+El resultado del test nos indica que no hay suficiente evidencia para descartar la hipótesis nula (>0.05), en otras palabras, es correcto considerar los tres primeros factores principales. Es de destacar que estos tres primeros factores explican el 76% de la variabilidad total.
+
+Como el objetivo principal es reducir la cantidad de 7 a menos factores, se probaron también los siguientes escenarios en cuanto a número de factores:
+
+4 factores: el test produjo el siguiente resultado: 
+Error in factanal(datfact2, i) : 4 factors are too many for 7 variables
+
+2 factores:el test produjo el siguiente resultado:
+The p-value is 4.13e-17. Lo que rechazaría la hipotesis nula indicando que ese número es inadecuado.
+
+Dado estos resultados, se valida que el número mínimos adecuado de factores en este caso es 3.
+
+Teniendo una estructura factorial con 3 factores. Las cargas factoriales serán: 
+
+```{r factores2}
+fac2<-prcomp(datfact2, retx=,center=TRUE,scale.=TRUE,tol=NULL,rank. = 3)
+fac2
+```
+Estas cargas factoriales corresponden a los autovectores de la matriz de correlaciones. Para obtener las
+cargas factoriales debemos multiplicar cada columna por la raiz cuadrada del autovalor correspondiente. 
+
+
+```{r cargasfact2}
+cargas21<-matrix(0,7,3)
+for (i in 1:3) cargas21[,i]<-fac2$rotation[,i]*fac2$sdev[i]
+cargas22<-varimax(cargas21,normalize=T)$loadings
+print(cargas22,cutoff=0.3)
+```
+
+Podemos obtener las comunalidades y las unicidades con base en el procedimiento indicado en las notas de la materia (pag.50)
+
+```{r comunali2}
+comunalidad<-matrix(0,7,2)
+for (i in 1:7)
+  {for (j in 1:3)
+        {comunalidad[i,1]=comunalidad[i,1]+cargas21[i,j]^2
+        comunalidad[i,2]=1-comunalidad[i,1]}}
+comunalidad
+```
+Obtenemos también la contribución de cada factor en la explicación de cada variable, tanto para el
+total de la varianza de la variable (cargas23) como para el total explicado por el modelo factorial (cargas24):
+
+```{r cargas2}
+cargas23<-matrix(0,7,3)
+cargas24<-matrix(0,7,3)
+  for (i in 1:7)
+    {cargas23[i,]<-cargas22[i,]^2
+    cargas24[i,]<-cargas23[i,]/comunalidad[i,1]}
+print('cargas23')
+cargas23
+print('cargas24')
+cargas24
+```
+
+
+Vemos como el primer factor, explica de forma adecuada gran parte de la variabilidad de la variable V3, con una proporcion de Cargas23=0.65.
+
+A continuación Obtenemos las gráficas bidimensionales de las cargas factoriales.
+
+```{r plotCarF2}
+for (i in 1:2){
+  plot(cargas22[,i],cargas22[,i+1])
+  text(cargas22[,i],cargas22[,i+1],labels=row.names(datfact2))}
+```
+Ahora, graficamos las puntuaciones factoriales de los individuos:
+
+```{r graficos}
+# puntuaciones factoriales
+par(mfrow=c(3,2))
+for (i in 1:3){
+  for(j in 1:3){
+    {plot(fac2$x[,i],fac2$x[,j])}
+    text(fac2$x[,i],fac2$x[,j],labels=row.names(fac2$x))}}
+```
+En conclusion: identificamos tres factores de comportamiento latente los cuales, se comprobó que es número mínimo adecuado para este caso con la aplicación del contraste de hipótesis del paquete factanal. De esta forma pueden ser identificados los factores como:
+
+Factor 1: Que relaciona a las características V4,V5,V6
+Factor 2: Que relaciona a aspectos V1 y V3
+Factor 3: Que relaciona a las variables V2 y V7
